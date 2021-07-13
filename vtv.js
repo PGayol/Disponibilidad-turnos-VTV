@@ -1,5 +1,17 @@
 let request = require('request');
+const readline = require('readline')
 
+// To prevent Windows executable file to close after execution.
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+})
+
+var places = [00001, 00006];
+var placesAsString = ["00001", "00006"];
+var month = null;
+var year = null;
+var repeat = false; // Change to true if want to check every second.
 const headers = [    {
   "key": "Connection",
   "value": "keep-alive"
@@ -62,17 +74,28 @@ let options = {
   form: {
     controllerName: "AgendaController",
     actionName: "obtenerDiasDisponibles",
-    plantas: [00001, 00006],
+    plantas: places,
     sobreTurno: true,
-    mes: 8,
-    year: 2021
+    mes: month,
+    year: year
   },
   headers: [],
 };
 const newHeaders = [];
 var availableDates = [{}];
 
-let main = function() {
+rl.question('Insert month (number): ', (answerMonth) => {
+  month = answerMonth;
+  options.form.mes = month;
+    rl.question('Insert year: ', (answerYear) => {
+      year = answerYear;
+      options.form.year = year;
+      main(repeat);
+    });
+  // rl.close();
+});
+
+let main = function(repeatRequest) {
   headers.forEach(header => {
     var key = header.key;
     var obj = {};
@@ -81,24 +104,37 @@ let main = function() {
   });
   options.headers = newHeaders;
   console.log("Running");
-  let trying = 1;
-  setInterval(function(){ 
-      request.post(options, (error, res, body) => {
+  if (repeatRequest) {
+      setInterval(() => {check(repeatRequest)}, 1000);
+  } else {
+    check(repeatRequest);
+  }
+}
+
+let check = function(repeatRequest) { 
+    let trying = 1;
+    request.post(options, (error, res, body) => {
       if (error) {
         console.log(error);
       }
       body = JSON.parse(body);
-      if (body.success && !body.results) {
-        console.log("No date available. Try N° " + trying +  " Last available date was: ", availableDates[availableDates.length - 1]);
+      if (body.success && !body.result.length) {
+        if (repeatRequest) {
+          console.log("No date available. Try N° " + trying +  " Last available date was: ", availableDates[availableDates.length - 1]);
+        } else {
+            console.log("No date available");
+        }
       }
       if (body.success && body.result && body.result.length) {
-        console.log("Date found: ", body.result);
-        body.result.try = trying;
-        availableDates.push(body.result);
+        body.result.forEach(date => {
+          // Need to check for idPlanta again since API is not filtering well.
+          if (placesAsString.includes(date.idPlanta)) {
+            console.log("Date available: " + date.fecha + " - " + date.planta);
+            body.result.try = trying;
+            availableDates.push(date);
+          }
+        });
       }
       trying++;
-    });
-   }, 5000);
-}
-
-main();
+  });
+ }  
